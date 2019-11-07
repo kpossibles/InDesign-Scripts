@@ -7,6 +7,8 @@ var scriptFileName = null;
 var lastScriptPath = null;
 var newScript = true;
 var lastScriptIndex = 0;
+var book = [];
+var currPage=0;//0 index
 
 var directory = new File($.fileName).parent;
 
@@ -38,6 +40,48 @@ var scriptTab = tpanel1.add("tab", undefined, undefined, {name: "scriptTab"});
     scriptTab.alignChildren = ["left","top"]; 
     scriptTab.spacing = 10; 
     scriptTab.margins = 10; 
+
+// PAGENAVIGATION
+// ==============
+var pageNavigation = scriptTab.add("group", undefined, {name: "pageNavigation"}); 
+    pageNavigation.orientation = "row"; 
+    pageNavigation.alignChildren = ["center","center"]; 
+    pageNavigation.preferredSize.width = 300; 
+    pageNavigation.spacing = 10; 
+    pageNavigation.margins = 0; 
+
+var leftPageBtn = pageNavigation.add("button", undefined, undefined, {name: "button1"}); 
+    leftPageBtn.text = "\u25C0"; // left pointing triangle unicode
+    leftPageBtn.justify = "left"; 
+    leftPageBtn.preferredSize.width = 30; 
+    leftPageBtn.onClick = function() {
+        //TODO
+        if(currPage>0){
+            loadPageScript(--currPage)
+        } else{
+            alert("Reached front of book!");
+        }
+    };
+
+var navigationText = pageNavigation.add("statictext", undefined, undefined, {name: "statictext1"}); 
+    navigationText.text = "Page _ of __";
+    navigationText.justify = "center"; 
+    navigationText.preferredSize.width = 200;
+
+// TODO - add editable text page number
+
+var rightPageBtn = pageNavigation.add("button", undefined, undefined, {name: "button2"}); 
+    rightPageBtn.text = "\u25B6";  // right pointing triangle unicode
+    rightPageBtn.justify = "right";
+    rightPageBtn.preferredSize.width = 30; 
+    rightPageBtn.onClick = function() {
+        //TODO
+        if(currPage<book.length){
+            loadPageScript(++currPage)
+        } else{
+            alert("Reached end of book!");
+        }
+    }; 
 
 var list = scriptTab.add("listbox", undefined, undefined, {name: "list"}); 
     list.preferredSize.width = 300; 
@@ -136,14 +180,14 @@ var replaceSplit = settingsTab.add("checkbox", undefined, undefined, {name: "rep
 var splitText = settingsTab.add('edittext {properties: {name: "splitText"}}'); 
     splitText.text = "//"; 
 
-var removePageNumbers = settingsTab.add("checkbox", undefined, undefined, {name: "removePageNumbers"}); 
-    removePageNumbers.text = "Remove Page Numbers"; 
-    removePageNumbers.onClick = function() {
-    if (list != null) {
-        removePageNumbersFunction();
-        populateList() ;
-    }
-};
+// var removePageNumbers = settingsTab.add("checkbox", undefined, undefined, {name: "removePageNumbers"}); 
+//     removePageNumbers.text = "Remove Page Numbers"; 
+//     removePageNumbers.onClick = function() {
+//     if (list != null) {
+//         removePageNumbersFunction();
+//         populateList() ;
+//     }
+// };
 
 var removeParentheticalText = settingsTab.add("checkbox", undefined, undefined, {name: "removeParentheticalText"}); 
     removeParentheticalText.text = "Remove Parathentical Text"; 
@@ -200,6 +244,33 @@ dialog.show();
 
 doc.addEventListener('afterSelectionChanged', selectionChanged);
 
+function loadPageScript(pageNumIndex){
+    var actualPageNum=pageNumIndex+1;
+    list.removeAll();
+    navigationText.text = "Page "+actualPageNum+" of "+(book.length+1);
+
+    for(var i=0;i<book[pageNumIndex].script.length;i++){
+        list.add("item", book[pageNumIndex].script[i]);
+    }
+    if(list.items.length>0){
+        list.items[0].selected=true;
+    }
+
+    // enable/disable buttons based on page
+    if(currPage==0){
+        leftPageBtn.enabled = false;
+    }
+    if(currPage>0){
+        leftPageBtn.enabled = true;
+    }
+    if(currPage<book.length){
+        rightPageBtn.enabled = true;
+    }
+    if(currPage==book.length){
+        rightPageBtn.enabled = false;
+    }
+}
+
 function selectionChanged() {
     if (doc.selection[0] instanceof TextFrame && doc.selection[0].contents == '' && doc.selection[1] == null) {
         placeText();
@@ -224,11 +295,27 @@ function populateList() {
     }
     else if (scriptFile != "" && scriptFile != null) {
         list.removeAll();
-        for (var i=0; i<script.length; i++) {
-            list.add('item', script[i]);
+        
+        var regex = /([0-9]+)(\.*)(\h*)/
+        var removeZerosRegex = /^0+/;
+        var scriptOnPage=[];
+        
+        for (var i=0;i<script.length;i++){
+            if(script[i].match(regex) && parseInt(script[i].replace(removeZerosRegex,''))>1){
+                var actualPageNum = parseInt(script[i].replace(removeZerosRegex,''))-1;
+                book[actualPageNum-1] ={
+                    page: actualPageNum,
+                    script: scriptOnPage
+                };
+                scriptOnPage = [];
+            }
+            else {
+                if(parseInt(script[i].replace(removeZerosRegex,''))!=1)
+                    scriptOnPage.push(script[i]);
+            }
         }
         if (newScript) {
-            list.selection = 0;
+            loadPageScript(0);
         }
         else {
             list.selection = lastScriptIndex;
@@ -276,7 +363,7 @@ function resetOptions() {
     trimPeriods.value = 0;
     removeJP.value = 0;
     replaceSplit.value = 0;
-    removePageNumbers.value = 0;
+    //removePageNumbers.value = 0;
     removeParentheticalText.value = 0;
     removeBracketedText.value = 0;
     removeCurlyBracedText.value = 0;
@@ -322,9 +409,9 @@ function loadOptions() {
             if (option[0] == "splitText") {
                 splitText.text = option[1];
             }
-            if (option[0] == "removePageNumbers") {
-                removePageNumbers.value = (option[1] == "true");
-            }
+            // if (option[0] == "removePageNumbers") {
+            //     removePageNumbers.value = (option[1] == "true");
+            // }
             if (option[0] == "removeParentheticalText") {
                 removeParentheticalText.value = (option[1] == "true");
             }
@@ -359,7 +446,7 @@ function saveOptions() {
         optionsFile.writeln("removeJP=" + removeJP.value);
         optionsFile.writeln("replaceSplit=" + replaceSplit.value);
         optionsFile.writeln("splitText=" + splitText.text);
-        optionsFile.writeln("removePageNumbers=" + removePageNumbers.value);
+        //optionsFile.writeln("removePageNumbers=" + removePageNumbers.value);
         optionsFile.writeln("removeParentheticalText=" + removeParentheticalText.value);
         optionsFile.writeln("removeBracketedText=" + removeBracketedText.value);
         optionsFile.writeln("removeCurlyBracedText=" + removeCurlyBracedText.value);
@@ -459,17 +546,17 @@ function replaceSplitFunction() {
     }
 }
 
-function removePageNumbersFunction() {
-    if (removePageNumbers.value) {
-        var regex = /([0-9]+)\.(\h*)/
-        for (var i=0; i<script.length; i++) {
-            if (script[i].match(regex)) {
-                script[i] = script[i].replace(regex, "");
-            }
-        }
-        script = removeEmptyLines(script);
-    }
-}
+// function removePageNumbersFunction() {
+//     if (removePageNumbers.value) {
+//         var regex = /([0-9]+)\.(\h*)/
+//         for (var i=0; i<script.length; i++) {
+//             if (script[i].match(regex)) {
+//                 script[i] = script[i].replace(regex, "");
+//             }
+//         }
+//         script = removeEmptyLines(script);
+//     }
+// }
 
 function removeParentheticalTextFunction() {
     if (removeParentheticalText.value) {
